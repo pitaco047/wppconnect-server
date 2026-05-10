@@ -160,6 +160,10 @@ export function initServer(serverOptions: Partial<ServerOptions>): {
     });
   });
 
+  // Prevent premature connection closure on proxies/load-balancers
+  http.keepAliveTimeout = 65000;
+  http.headersTimeout = 66000;
+
   http.listen(PORT, () => {
     logger.info(`Server is running on port: ${PORT}`);
     logger.info(
@@ -168,7 +172,39 @@ export function initServer(serverOptions: Partial<ServerOptions>): {
     logger.info(`WPPConnect-Server version: ${version}`);
 
     if (serverOptions.startAllSession) startAllSessions(serverOptions, logger);
+
+    // Keep-alive heartbeat: prevents the process from exiting when there are
+    // no active WhatsApp sessions. Logs server status every 30 seconds so the
+    // event loop always has a pending timer reference.
+    const keepAliveInterval = setInterval(() => {
+      logger.info(
+        `[keep-alive] Server uptime: ${Math.floor(process.uptime())}s, memory: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+      );
+    }, 30000);
+
+    // unref() allows the process to exit cleanly on explicit shutdown without
+    // the interval itself blocking termination.
+    keepAliveInterval.unref();
+
+    process.on('SIGTERM', () => {
+      logger.info('[lifecycle] SIGTERM received — shutting down gracefully');
+      clearInterval(keepAliveInterval);
+      http.close(() => {
+        logger.info('[lifecycle] HTTP server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      logger.info('[lifecycle] SIGINT received — shutting down gracefully');
+      clearInterval(keepAliveInterval);
+      http.close(() => {
+        logger.info('[lifecycle] HTTP server closed');
+        process.exit(0);
+      });
+    });
   });
+
 
   if (config.log.level === 'error' || config.log.level === 'warn') {
     console.log(`\x1b[33m ======================================================

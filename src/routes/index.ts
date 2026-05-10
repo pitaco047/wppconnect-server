@@ -963,6 +963,9 @@ routes.get('/api-docs', swaggerUi.setup(swaggerDocument) as any);
 routes.get('/healthz', HealthCheck.healthz);
 routes.get('/unhealthy', HealthCheck.unhealthy);
 
+// Health check — alias used by Railway and other platforms
+routes.get('/health', HealthCheck.healthz);
+
 //Metrics Prometheus
 
 routes.get('/metrics', prometheusRegister.metrics);
