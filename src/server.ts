@@ -14,6 +14,16 @@
  * limitations under the License.
  */
 import config from './config';
-import { initServer } from './index';
+import { initServer, logger } from './index';
 
-initServer(config);
+try {
+  initServer(config);
+} catch (error: unknown) {
+  const err = error instanceof Error ? error : new Error(String(error));
+  logger.error('[server] Fatal error during initServer — process will exit', {
+    message: err.message,
+    stack: err.stack,
+    name: err.name,
+  });
+  process.exit(1);
+}

@@ -40,6 +40,26 @@ import { createLogger } from './util/logger';
 
 export const logger = createLogger(config.log);
 
+process.on('uncaughtException', (error: Error) => {
+  logger.error('[uncaughtException] Uncaught exception — process will exit', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+  });
+  // Give the logger time to flush before exiting
+  setTimeout(() => process.exit(1), 500);
+});
+
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  logger.error('[unhandledRejection] Unhandled promise rejection', {
+    message,
+    stack,
+    promise: String(promise),
+  });
+});
+
 export function initServer(serverOptions: Partial<ServerOptions>): {
   app: Express;
   routes: Router;
@@ -113,6 +133,30 @@ export function initServer(serverOptions: Partial<ServerOptions>): {
 
     sock.on('disconnect', () => {
       logger.info(`ID: ${sock.id} saiu`);
+    });
+
+    sock.on('error', (error: Error) => {
+      logger.error('[socket.io] Socket error', {
+        socketId: sock.id,
+        message: error.message,
+        stack: error.stack,
+      });
+    });
+  });
+
+  io.engine.on('connection_error', (error: any) => {
+    logger.error('[socket.io] Engine connection error', {
+      code: error.code,
+      message: error.message,
+      context: error.context,
+    });
+  });
+
+  http.on('error', (error: NodeJS.ErrnoException) => {
+    logger.error('[http] HTTP server error', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack,
     });
   });
 
